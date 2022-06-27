@@ -1,0 +1,15 @@
+
+# editor cache/config files/directories
+.vs
+.vscode
+*.code-workspace
+
+# OS cache/config files/directories
+.DS_Store
+.Trash*
+desktop.ini
+
+# build directories
+build*
+target*
+out*
