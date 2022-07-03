@@ -141,8 +141,7 @@ impl App {
                 Err(e) => match e {
                     sync::mpsc::TryRecvError::Empty => break,
                     sync::mpsc::TryRecvError::Disconnected => {
-                        panic!("Error: event handler thread disconnected\
-                        prematurely")
+                        panic!("event handler thread disconnected prematurely")
                     }
                 }
             };
