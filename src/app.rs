@@ -74,7 +74,7 @@ impl App {
     }
 
     // ANCHOR draw UI function
-    pub fn draw(&mut self) -> io::Result<CompletedFrame>{
+    pub fn draw(&mut self) -> io::Result<CompletedFrame> {
         self.terminal.draw(|f|{
             let size = f.size();
             let rects = Layout::default()
@@ -86,7 +86,8 @@ impl App {
                     ].as_ref()
                 )
                 .split(size);
-            let selected_style = Style::default().add_modifier(Modifier::REVERSED);
+            let selected_style = Style::default()
+                .add_modifier(Modifier::REVERSED);
             let header_cells = ["Char", "Code", "Name"]
                 .iter()
                 .map(|x| {
@@ -105,7 +106,11 @@ impl App {
             });
             let t = Table::new(rows)
                 .header(header)
-                .block(Block::default().borders(Borders::ALL).title("Table"))
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title("ferris-finder")
+                )
                 .highlight_style(selected_style)
                 .highlight_symbol("|> ")
                 .widths(&[
@@ -200,7 +205,6 @@ impl App {
             ));
             self.table_state.select(Some(0));
         }
-
         Ok(())
     }
 

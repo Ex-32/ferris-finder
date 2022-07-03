@@ -8,9 +8,10 @@ use std::{
     sync::{
         Arc,
         atomic::{AtomicBool, Ordering}
-    }
+    },
+    time::Duration
 };
-use crossterm::event::{self, Event, KeyCode, KeyModifiers};
+use crossterm::event::{self, Event, KeyCode, KeyModifiers, poll};
 
 mod ucd;
 mod app;
@@ -27,6 +28,13 @@ fn main() -> Result<(), io::Error> {
         let sender = event_sender;
         let running = running_copy;
         loop {
+            match poll(Duration::new(0,0)) {
+                Ok(available) => {
+                    if !available { thread::sleep(Duration::from_millis(10)); }
+                }
+                Err(_) => ()
+            }
+
             let event = match event::read() {
                 Ok(event) => event,
                 Err(err) => {
@@ -87,6 +95,7 @@ fn main() -> Result<(), io::Error> {
     while running.load(Ordering::Relaxed) {
         app.update()?;
         app.draw()?;
+        thread::sleep(Duration::from_millis(30));
     }
 
     let exit_buffer = app.exit_buffer.clone();
