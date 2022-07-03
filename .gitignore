@@ -13,3 +13,7 @@ desktop.ini
 build*
 target*
 out*
+
+# misc logs/data
+*.log
+perf.data*
