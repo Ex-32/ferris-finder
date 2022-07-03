@@ -1,4 +1,6 @@
 
+const FERRIS: u32 = 0x1F980;
+
 #[derive(Debug, Clone)]
 pub struct CharEntry {
     pub codepoint: u32,
@@ -8,20 +10,23 @@ pub struct CharEntry {
 }
 
 impl CharEntry {
-
     pub fn from_ucd_line(ucd_line: &str) -> Option<CharEntry> {
+        let mut is_ferris = false;
         let data_entry = ucd_line.trim()
             .split(";")
             .collect::<Vec<&str>>();
 
         let codepoint = match data_entry.get(0) {
             Some(x) => match u32::from_str_radix(x, 16) {
-                Ok(x) => x,
+                Ok(x) => {
+                    if x == FERRIS { is_ferris = true; }
+                    x
+                },
                 Err(_) => return None
             }
             None => return None
         };
-        let name = match data_entry.get(1) {
+        let mut name = match data_entry.get(1) {
             Some(x) => (*x).to_owned(),
             None => return None
         };
@@ -65,6 +70,7 @@ impl CharEntry {
             Some(x) => (*x).to_owned(),
             None => return None,
         };
+        if is_ferris { name.push_str(" (FERRIS)"); }
 
         Some(CharEntry{codepoint, name, category, unicode_1_name})
     }

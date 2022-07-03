@@ -1,9 +1,10 @@
 [package]
 name = "ferris-finder"
-authors = ["Jenna Fligor <jenna@fligor.net>"]
+discription = "A simple Unicode character finder with fuzzy search"
 version = "0.1.0"
-edition = "2021"
 license = "MIT"
+authors = ["Jenna Fligor <jenna@fligor.net>"]
+edition = "2021"
 
 [profile.release]
 opt-level = 3

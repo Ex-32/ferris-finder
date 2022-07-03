@@ -61,7 +61,7 @@ impl App {
         let mut table_state = TableState::default();
         table_state.select(Some(0));
 
-        Ok(App {
+        Ok(App{
             running_flag,
             terminal,
             event_receiver,
