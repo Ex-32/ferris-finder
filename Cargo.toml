@@ -5,6 +5,7 @@ version = "0.1.0"
 license = "MIT"
 authors = ["Jenna Fligor <jenna@fligor.net>"]
 edition = "2021"
+repository = "https://github.com/Ex-32/ferris-finder"
 
 [profile.release]
 opt-level = 3
