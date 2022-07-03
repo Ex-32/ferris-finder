@@ -68,11 +68,21 @@ impl CharEntry {
 
         Some(CharEntry{codepoint, name, category, unicode_1_name})
     }
+
+    pub fn fmt_codepoint(codepoint: u32) -> String {
+        let code = format!("{:X}", codepoint);
+        let mut padded = String::new();
+        while (padded.len() + code.len()) < 4  {
+            padded.push('0');
+        }
+        padded.push_str(&code);
+        format!("U+{}", padded)
+    }
 }
 
 
 // ANCHOR General Category
-// https://www.unicode.org/Public/5.1.0/ucd/UCD.html#General_Category_Values
+// LINK https://www.unicode.org/Public/5.1.0/ucd/UCD.html#General_Category_Values
 #[derive(Debug, Clone, Copy)]
 pub enum GeneralCategory {
     LetterUppercase,

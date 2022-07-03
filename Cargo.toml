@@ -3,6 +3,7 @@ name = "ferris-finder"
 authors = ["Jenna Fligor <jenna@fligor.net>"]
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
 
 [profile.release]
 opt-level = 3
@@ -10,4 +11,5 @@ lto = "on"
 
 [dependencies]
 tui = "0.18.0"
-crossterm = "0.23.2"
+crossterm = "0.24.0"
+fuzzy-matcher = "0.3.7"

@@ -35,14 +35,21 @@ fn main() -> Result<(), io::Error> {
             };
 
             if let Event::Key(key) = event {
-                if let KeyCode::Char(ch) = key.code {
-                    if ch == 'c' &&
-                    key.modifiers.contains(KeyModifiers::CONTROL) {
-                        if ctrlc_pressed { exit(2); }
+                match key.code {
+                    KeyCode::Char(ch) => {
+                        if ch == 'c' &&
+                        key.modifiers.contains(KeyModifiers::CONTROL) {
+                            if ctrlc_pressed { exit(2); }
+                            running.store(false, Ordering::Relaxed);
+                            ctrlc_pressed = true;
+                            continue;
+                        }
+                    }
+                    KeyCode::Esc => {
                         running.store(false, Ordering::Relaxed);
-                        ctrlc_pressed = true;
                         continue;
                     }
+                    _ => ()
                 }
             }
 
@@ -50,7 +57,8 @@ fn main() -> Result<(), io::Error> {
         }
     });
 
-    let filename = "data/UnicodeData.csv";
+    // LINK https://www.unicode.org/Public/UCD/latest/ucd/UnicodeData.txt
+    let filename = "data/UnicodeData.txt";
 
     let data = match fs::read_to_string(filename) {
         Ok(data) => data.trim()
@@ -64,6 +72,7 @@ fn main() -> Result<(), io::Error> {
     };
 
     let mut app = match app::App::new(
+        running.clone(),
         io::stdout(),
         event_receiver,
         data
@@ -80,6 +89,12 @@ fn main() -> Result<(), io::Error> {
         app.draw()?;
     }
 
+    let exit_buffer = app.exit_buffer.clone();
     drop(app);
+
+    if exit_buffer.is_some() {
+        println!("{}", exit_buffer.unwrap());
+    }
+
     Ok(())
 }

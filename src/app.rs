@@ -1,6 +1,10 @@
 use std::{
     io::{self, Stdout},
-    sync, vec,
+    sync::{
+        self,
+        atomic::{AtomicBool,Ordering},
+        Arc
+    }
 };
 use crossterm::{
     terminal::{
@@ -14,7 +18,8 @@ use crossterm::{
         EnableMouseCapture,
         DisableMouseCapture,
         KeyCode,
-        KeyModifiers
+        KeyModifiers,
+        MouseEventKind
     },
 };
 use tui::{
@@ -25,37 +30,22 @@ use tui::{
     terminal::CompletedFrame, style::{Style, Color, Modifier},
 };
 use crate::ucd;
-// use crate::fuzzy;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Focus {
-    Table,
-    Search
-}
-
-impl Focus {
-    fn toggle(&mut self) {
-        match self {
-            Focus::Table => *self = Focus::Search,
-            Focus::Search => *self = Focus::Table,
-        }
-    }
-}
+use crate::fuzzy;
 
 pub struct App {
+    running_flag: Arc<AtomicBool>,
     terminal: Terminal<CrosstermBackend<Stdout>>,
     event_receiver: sync::mpsc::Receiver<Event>,
     data: Vec<ucd::CharEntry>,
-
     table_state: TableState,
     table_data: Vec<Vec<String>>,
-
     search: String,
-    focus: Focus
+    pub exit_buffer: Option<String>,
 }
 
 impl App {
     pub fn new(
+        running_flag: Arc<AtomicBool>,
         mut stdout: Stdout,
         event_receiver: sync::mpsc::Receiver<Event>,
         data: Vec<ucd::CharEntry>
@@ -72,38 +62,43 @@ impl App {
         table_state.select(Some(0));
 
         Ok(App {
+            running_flag,
             terminal,
             event_receiver,
             data,
             table_state,
             table_data,
             search: String::new(),
-            focus: Focus::Table
+            exit_buffer: None,
         })
     }
 
+    // ANCHOR draw UI function
     pub fn draw(&mut self) -> io::Result<CompletedFrame>{
         self.terminal.draw(|f|{
             let size = f.size();
             let rects = Layout::default()
                 .direction(layout::Direction::Vertical)
-                // .margin(1)
                 .constraints(
                     [
                         layout::Constraint::Percentage(90),
-                        layout::Constraint::Max(10),
+                        layout::Constraint::Min(3),
                     ].as_ref()
                 )
                 .split(size);
-
             let selected_style = Style::default().add_modifier(Modifier::REVERSED);
-            let header_cells = ["Character", "Codepoint", "Name"]
+            let header_cells = ["Char", "Code", "Name"]
                 .iter()
-                .map(|h| Cell::from(*h).style(Style::default().fg(Color::White).add_modifier(Modifier::BOLD)));
+                .map(|x| {
+                    Cell::from(*x)
+                        .style(Style::default()
+                        .fg(Color::White)
+                        .add_modifier(Modifier::BOLD))
+                }
+            );
             let header = Row::new(header_cells)
                 .style(Style::default())
-                .height(1)
-                .bottom_margin(1);
+                .height(1);
             let rows = self.table_data.iter().map(|item| {
                 let cells = item.iter().map(|c| Cell::from(c.as_ref()));
                 Row::new(cells).height(1)
@@ -120,27 +115,19 @@ impl App {
                     Constraint::Percentage(40),
                 ]);
 
-
-            let search_text: String;
-            if self.focus == Focus::Search {
-                search_text = format!("{}█", self.search);
-            } else {
-                search_text = self.search.clone();
-            }
-
-            let search = widgets::Paragraph::new(search_text)
+            let search = widgets::Paragraph::new(format!("{}█", self.search))
                 .block(
                     widgets::Block::default()
                         .borders(widgets::Borders::ALL)
                         .title("search: ")
                 );
 
-
             f.render_stateful_widget(t, rects[0], &mut self.table_state);
             f.render_widget(search, rects[1]);
         })
     }
 
+    // ANCHOR update state function
     pub fn update(&mut self) -> io::Result<()> {
         let old_search = self.search.clone();
         loop {
@@ -149,57 +136,75 @@ impl App {
                 Err(e) => match e {
                     sync::mpsc::TryRecvError::Empty => break,
                     sync::mpsc::TryRecvError::Disconnected => {
-                        panic!("Error: event handler thread disconnected prematurely")
+                        panic!("Error: event handler thread disconnected\
+                        prematurely")
                     }
                 }
             };
-            match event {
-                Event::Key(key) => {
-                    match self.focus {
-                        Focus::Search => {
-                            match key.code {
-                                KeyCode::Char(ch) => {
-                                    if key.modifiers.contains(KeyModifiers::SHIFT) {
-                                        self.search.extend(ch.to_uppercase());
-                                    } else {
-                                        self.search.push(ch);
-                                    }
-                                    continue;
-                                },
-                                KeyCode::Backspace => {
-                                    self.search.pop();
-                                    continue;
-                                },
-                                _ => ()
-                            }
-                        },
-                        Focus::Table => {
-                            match key.code {
-                                KeyCode::Up => self.table_previous(),
-                                KeyCode::Down => self.table_next(),
-                                _ => ()
-                            }
-                        }
-                    };
-                    match key.code {
-                        KeyCode::Tab => {
-                            self.focus.toggle();
-                        },
-                        _ => ()
-                    };
-                }
-                _ => ()
-                // Event::Mouse(mouse_event) => match mouse_event {
 
-                // }
+            match event {
+                Event::Mouse(mouse) => {
+                    match mouse.kind {
+                        MouseEventKind::ScrollUp => self.table_up(1),
+                        MouseEventKind::ScrollDown => self.table_down(1),
+                        _ => ()
+                    }
+                },
+                Event::Key(key) => match key.code {
+                    KeyCode::Up => self.table_up(1),
+                    KeyCode::Down => self.table_down(1),
+
+                    KeyCode::PageUp => self.table_up(10),
+                    KeyCode::PageDown => self.table_down(10),
+
+                    KeyCode::Home => self.table_state.select(Some(0)),
+                    KeyCode::End => self.table_state.select(
+                        Some(self.table_data.len() - 1)
+                    ),
+
+                    KeyCode::Char(ch) => {
+                        if key.modifiers.contains(KeyModifiers::SHIFT) {
+                            self.search.extend(ch.to_uppercase());
+                        } else {
+                            self.search.push(ch);
+                        }
+                        continue;
+                    },
+                    KeyCode::Backspace => {
+                        self.search.pop();
+                        continue;
+                    },
+                    KeyCode::Enter => {
+                        let i = self.table_state.selected();
+                        if i.is_some() {
+                            let i = i.unwrap();
+                            self.exit_buffer = match self.table_data.get(i) {
+                                Some(entry) => match entry.get(0) {
+                                    Some(str) => Some(str.clone()),
+                                    None => None,
+                                },
+                                None => None,
+                            };
+                            self.running_flag.store(false, Ordering::Relaxed);
+                        }
+                    }
+                    _ => ()
+                },
+                _ => ()
             }
         }
         if old_search.ne(&self.search) {
-            self.table_data = App::table_items_from_data(&self.data);
+            self.table_data = App::table_items_from_data(&fuzzy::prune(
+                &self.data,
+                &self.search
+            ));
+            self.table_state.select(Some(0));
         }
 
         Ok(())
     }
+
+    // ANCHOR helper functions
 
     fn table_items_from_data(data: &Vec<ucd::CharEntry>) -> Vec<Vec<String>> {
         let new = data.iter()
@@ -208,7 +213,7 @@ impl App {
                     char::from_u32(x.codepoint)
                         .unwrap_or(char::REPLACEMENT_CHARACTER)
                         .to_string(),
-                    format!("U+{:X}", x.codepoint),
+                    ucd::CharEntry::fmt_codepoint(x.codepoint),
                     x.name.clone(),
                     x.unicode_1_name.clone()
                 ]
@@ -217,35 +222,32 @@ impl App {
         new
     }
 
-    fn table_next(&mut self) {
+    fn table_down(&mut self, count: usize) {
         let i = match self.table_state.selected() {
             Some(i) => {
-                if i >= self.table_data.len() - 1 {
-                    0
-                } else {
-                    i + 1
+                if i + count > self.table_data.len() - 1 {
+                    (i + count) - self.table_data.len()
                 }
+                else { i + count }
             }
             None => 0,
         };
         self.table_state.select(Some(i));
     }
 
-    fn table_previous(&mut self) {
+    fn table_up(&mut self, count: usize) {
         let i = match self.table_state.selected() {
             Some(i) => {
-                if i == 0 {
-                    self.table_data.len() - 1
-                } else {
-                    i - 1
+                if count > i {
+                    self.table_data.len() - (count - i)
                 }
+                else { i - count }
             }
             None => 0,
         };
         self.table_state.select(Some(i));
     }
 }
-
 
 impl Drop for App {
     fn drop(&mut self) -> () {
