@@ -1,6 +1,6 @@
 [package]
 name = "ferris-finder"
-discription = "A simple Unicode character finder with fuzzy search"
+description = "A simple Unicode character finder with fuzzy search"
 version = "0.1.0"
 license = "MIT"
 authors = ["Jenna Fligor <jenna@fligor.net>"]
