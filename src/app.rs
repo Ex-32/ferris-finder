@@ -75,7 +75,7 @@ impl App {
                 .direction(layout::Direction::Vertical)
                 .constraints(
                     [
-                        layout::Constraint::Percentage(99),
+                        layout::Constraint::Percentage(95),
                         layout::Constraint::Min(3),
                     ]
                     .as_ref(),
