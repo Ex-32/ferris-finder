@@ -1,4 +1,3 @@
-
 const FERRIS: u32 = 0x1F980;
 
 #[derive(Debug, Clone)]
@@ -12,23 +11,23 @@ pub struct CharEntry {
 impl CharEntry {
     pub fn from_ucd_line(ucd_line: &str) -> Option<CharEntry> {
         let mut is_ferris = false;
-        let data_entry = ucd_line.trim()
-            .split(";")
-            .collect::<Vec<&str>>();
+        let data_entry = ucd_line.trim().split(';').collect::<Vec<&str>>();
 
-        let codepoint = match data_entry.get(0) {
+        let codepoint = match data_entry.first() {
             Some(x) => match u32::from_str_radix(x, 16) {
                 Ok(x) => {
-                    if x == FERRIS { is_ferris = true; }
+                    if x == FERRIS {
+                        is_ferris = true;
+                    }
                     x
-                },
-                Err(_) => return None
-            }
-            None => return None
+                }
+                Err(_) => return None,
+            },
+            None => return None,
         };
         let mut name = match data_entry.get(1) {
             Some(x) => (*x).to_owned(),
-            None => return None
+            None => return None,
         };
         let category = match data_entry.get(2) {
             Some(x) => match *x {
@@ -62,30 +61,36 @@ impl CharEntry {
                 "Cs" => GeneralCategory::OtherSurrogate,
                 "Co" => GeneralCategory::OtherPrivateUse,
                 "Cn" => GeneralCategory::OtherNotAssigned,
-                _    => GeneralCategory::OtherNotAssigned,
+                _ => GeneralCategory::OtherNotAssigned,
             },
-            None => return None
+            None => return None,
         };
         let unicode_1_name = match data_entry.get(10) {
             Some(x) => (*x).to_owned(),
             None => return None,
         };
-        if is_ferris { name.push_str(" (FERRIS)"); }
+        if is_ferris {
+            name.push_str(" (FERRIS)");
+        }
 
-        Some(CharEntry{codepoint, name, category, unicode_1_name})
+        Some(CharEntry {
+            codepoint,
+            name,
+            category,
+            unicode_1_name,
+        })
     }
 
     pub fn fmt_codepoint(codepoint: u32) -> String {
         let code = format!("{:X}", codepoint);
         let mut padded = String::new();
-        while (padded.len() + code.len()) < 4  {
+        while (padded.len() + code.len()) < 4 {
             padded.push('0');
         }
         padded.push_str(&code);
         format!("U+{}", padded)
     }
 }
-
 
 // ANCHOR General Category
 // LINK https://www.unicode.org/Public/5.1.0/ucd/UCD.html#General_Category_Values
