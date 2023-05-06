@@ -1,21 +1,25 @@
 use crate::fuzzy;
 use crate::ucd;
 use crossterm::{
-    event::{self, Event, KeyCode, KeyModifiers, MouseEventKind}, 
-    terminal
+    event::{self, Event, KeyCode, KeyModifiers, MouseEventKind},
+    terminal,
 };
 use rayon::prelude::*;
 use std::{
-    io, 
-    sync::{self, atomic::{AtomicBool, Ordering}, Arc}
+    io,
+    sync::{
+        self,
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
 };
 use tui::{
     backend::CrosstermBackend,
     layout::{self, Constraint},
     style::{Color, Modifier, Style},
-    widgets::{self, Borders, BorderType},
     text,
-    Terminal
+    widgets::{self, BorderType, Borders},
+    Terminal,
 };
 
 pub struct App {
@@ -86,7 +90,9 @@ impl App {
                         .add_modifier(Modifier::BOLD),
                 )
             });
-            let header = widgets::Row::new(header_cells).style(Style::default()).height(1);
+            let header = widgets::Row::new(header_cells)
+                .style(Style::default())
+                .height(1);
             let rows = self.table_data.iter().map(|item| {
                 let cells = item.iter().map(|c| widgets::Cell::from(c.as_ref()));
                 widgets::Row::new(cells).height(1)
@@ -96,8 +102,7 @@ impl App {
                 .block(
                     widgets::Block::default()
                         .borders(Borders::ALL)
-                        .border_type(BorderType::Rounded)
-                        // .title("ferris-finder")
+                        .border_type(BorderType::Rounded), // .title("ferris-finder")
                 )
                 .highlight_style(selected_style)
                 .highlight_symbol("|> ")
@@ -115,11 +120,10 @@ impl App {
                     .title(" Search "),
             );
 
-            let title = widgets::Block::default()
-                .title(text::Span::styled(
-                    "Ferris-Finder",
-                    Style::default().add_modifier(Modifier::BOLD)
-                ));
+            let title = widgets::Block::default().title(text::Span::styled(
+                "Ferris-Finder",
+                Style::default().add_modifier(Modifier::BOLD),
+            ));
 
             f.render_widget(title, rects[0]);
             f.render_widget(search, rects[1]);
@@ -148,7 +152,7 @@ impl App {
                     _ => (),
                 },
                 Event::Key(key) => match key.code {
-                    KeyCode::Esc => self.running_flag.store(false, Ordering::Relaxed), 
+                    KeyCode::Esc => self.running_flag.store(false, Ordering::Relaxed),
 
                     KeyCode::Up => self.table_up(1),
                     KeyCode::Down => self.table_down(1),
