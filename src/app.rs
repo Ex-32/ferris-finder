@@ -1,33 +1,29 @@
 use crate::fuzzy;
 use crate::ucd;
 use crossterm::{
-    event::{self, Event, KeyCode, KeyModifiers, MouseEventKind},
-    terminal,
+    event::{self, Event, KeyCode, KeyModifiers, MouseEventKind}, 
+    terminal
 };
 use rayon::prelude::*;
 use std::{
-    io::{self, Stdout},
-    sync::{
-        self,
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
+    io, 
+    sync::{self, atomic::{AtomicBool, Ordering}, Arc}
 };
 use tui::{
     backend::CrosstermBackend,
-    layout::{self, Constraint, Layout},
+    layout::{self, Constraint},
     style::{Color, Modifier, Style},
-    terminal::CompletedFrame,
-    widgets::{self, *},
-    Terminal,
+    widgets::{self, Borders, BorderType},
+    text,
+    Terminal
 };
 
 pub struct App {
     running_flag: Arc<AtomicBool>,
-    terminal: Terminal<CrosstermBackend<Stdout>>,
+    terminal: Terminal<CrosstermBackend<io::Stdout>>,
     event_receiver: sync::mpsc::Receiver<Event>,
     data: Vec<ucd::CharEntry>,
-    table_state: TableState,
+    table_state: widgets::TableState,
     table_data: Vec<Vec<String>>,
     search: String,
     pub exit_buffer: Option<String>,
@@ -36,7 +32,7 @@ pub struct App {
 impl App {
     pub fn new(
         running_flag: Arc<AtomicBool>,
-        mut stdout: Stdout,
+        mut stdout: io::Stdout,
         event_receiver: sync::mpsc::Receiver<Event>,
         data: Vec<ucd::CharEntry>,
     ) -> io::Result<Self> {
@@ -47,12 +43,12 @@ impl App {
             event::EnableMouseCapture
         )?;
         let backend = CrosstermBackend::new(stdout);
-        let terminal = match Terminal::new(backend) {
+        let terminal = match tui::Terminal::new(backend) {
             Ok(terminal) => terminal,
             Err(err) => return Err(err),
         };
         let table_data = App::table_items_from_data(&data.par_iter().collect::<Vec<_>>());
-        let mut table_state = TableState::default();
+        let mut table_state = widgets::TableState::default();
         table_state.select(Some(0));
 
         Ok(App {
@@ -68,38 +64,40 @@ impl App {
     }
 
     // ANCHOR draw UI function
-    pub fn draw(&mut self) -> io::Result<CompletedFrame> {
+    pub fn draw(&mut self) -> io::Result<tui::terminal::CompletedFrame> {
         self.terminal.draw(|f| {
             let size = f.size();
-            let rects = Layout::default()
+            let rects = layout::Layout::default()
                 .direction(layout::Direction::Vertical)
                 .constraints(
                     [
-                        layout::Constraint::Percentage(95),
-                        layout::Constraint::Min(3),
+                        Constraint::Min(1),
+                        Constraint::Min(3),
+                        Constraint::Percentage(100),
                     ]
                     .as_ref(),
                 )
                 .split(size);
             let selected_style = Style::default().add_modifier(Modifier::REVERSED);
             let header_cells = ["Char", "Code", "Name"].iter().map(|x| {
-                Cell::from(*x).style(
+                widgets::Cell::from(*x).style(
                     Style::default()
                         .fg(Color::White)
                         .add_modifier(Modifier::BOLD),
                 )
             });
-            let header = Row::new(header_cells).style(Style::default()).height(1);
+            let header = widgets::Row::new(header_cells).style(Style::default()).height(1);
             let rows = self.table_data.iter().map(|item| {
-                let cells = item.iter().map(|c| Cell::from(c.as_ref()));
-                Row::new(cells).height(1)
+                let cells = item.iter().map(|c| widgets::Cell::from(c.as_ref()));
+                widgets::Row::new(cells).height(1)
             });
-            let t = Table::new(rows)
+            let table = widgets::Table::new(rows)
                 .header(header)
                 .block(
-                    Block::default()
+                    widgets::Block::default()
                         .borders(Borders::ALL)
-                        .title("ferris-finder"),
+                        .border_type(BorderType::Rounded)
+                        // .title("ferris-finder")
                 )
                 .highlight_style(selected_style)
                 .highlight_symbol("|> ")
@@ -112,12 +110,20 @@ impl App {
 
             let search = widgets::Paragraph::new(format!("{}█", self.search)).block(
                 widgets::Block::default()
-                    .borders(widgets::Borders::ALL)
-                    .title("search: "),
+                    .borders(Borders::ALL)
+                    .border_type(BorderType::Rounded)
+                    .title(" Search "),
             );
 
-            f.render_stateful_widget(t, rects[0], &mut self.table_state);
+            let title = widgets::Block::default()
+                .title(text::Span::styled(
+                    "Ferris-Finder",
+                    Style::default().add_modifier(Modifier::BOLD)
+                ));
+
+            f.render_widget(title, rects[0]);
             f.render_widget(search, rects[1]);
+            f.render_stateful_widget(table, rects[2], &mut self.table_state);
         })
     }
 
@@ -142,6 +148,8 @@ impl App {
                     _ => (),
                 },
                 Event::Key(key) => match key.code {
+                    KeyCode::Esc => self.running_flag.store(false, Ordering::Relaxed), 
+
                     KeyCode::Up => self.table_up(1),
                     KeyCode::Down => self.table_down(1),
 
