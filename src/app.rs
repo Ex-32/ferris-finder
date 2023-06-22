@@ -26,11 +26,11 @@ pub struct App {
     running_flag: Arc<AtomicBool>,
     terminal: Terminal<CrosstermBackend<io::Stdout>>,
     event_receiver: sync::mpsc::Receiver<Event>,
-    data: Vec<ucd::CharEntry>,
+    data: Box<[ucd::CharEntry]>,
     table_state: widgets::TableState,
-    table_data: Vec<Vec<String>>,
+    table_data: Box<[Box<[Box<str>]>]>,
     search: String,
-    pub exit_buffer: Option<String>,
+    pub exit_buffer: Option<Box<str>>,
 }
 
 impl App {
@@ -38,7 +38,7 @@ impl App {
         running_flag: Arc<AtomicBool>,
         mut stdout: io::Stdout,
         event_receiver: sync::mpsc::Receiver<Event>,
-        data: Vec<ucd::CharEntry>,
+        data: Box<[ucd::CharEntry]>,
     ) -> io::Result<Self> {
         terminal::enable_raw_mode()?;
         crossterm::execute!(
@@ -199,21 +199,22 @@ impl App {
 
     // ANCHOR helper functions
 
-    fn table_items_from_data(data: &[&ucd::CharEntry]) -> Vec<Vec<String>> {
-        let new = data
-            .iter()
+    fn table_items_from_data(data: &[&ucd::CharEntry]) -> Box<[Box<[Box<str>]>]> {
+        data.par_iter()
             .map(|x| {
                 vec![
                     char::from_u32(x.codepoint)
                         .unwrap_or(char::REPLACEMENT_CHARACTER)
-                        .to_string(),
+                        .to_string()
+                        .into_boxed_str(),
                     ucd::CharEntry::fmt_codepoint(x.codepoint),
                     x.name.clone(),
                     x.unicode_1_name.clone(),
                 ]
+                .into_boxed_slice()
             })
-            .collect();
-        new
+            .collect::<Vec<_>>()
+            .into_boxed_slice()
     }
 
     fn table_down(&mut self, count: usize) {

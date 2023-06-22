@@ -3,32 +3,32 @@ const FERRIS: u32 = 0x1F980;
 #[derive(Debug, Clone)]
 pub struct CharEntry {
     pub codepoint: u32,
-    pub name: String,
+    pub name: Box<str>,
     pub category: GeneralCategory,
-    pub unicode_1_name: String,
+    pub unicode_1_name: Box<str>,
 }
 
 impl CharEntry {
     pub fn from_ucd_line(ucd_line: &str) -> Option<CharEntry> {
         let mut is_ferris = false;
-        let data_entry = ucd_line.trim().split(';').collect::<Vec<&str>>();
+        let data_entry = ucd_line.trim().split(';').collect::<Box<[&str]>>();
 
-        let codepoint = match data_entry.first() {
-            Some(x) => match u32::from_str_radix(x, 16) {
-                Ok(x) => {
-                    if x == FERRIS {
-                        is_ferris = true;
-                    }
-                    x
+        let codepoint = match u32::from_str_radix(data_entry.first()?, 16) {
+            Ok(x) => {
+                if x == FERRIS {
+                    is_ferris = true;
                 }
-                Err(_) => return None,
-            },
-            None => return None,
+                x
+            }
+            Err(_) => return None,
         };
-        let mut name = match data_entry.get(1) {
-            Some(x) => (*x).to_owned(),
-            None => return None,
+
+        let name = if is_ferris {
+            format!("{} (FERRIS)", data_entry.get(1)?).into()
+        } else {
+            (*(data_entry.get(1)?)).into()
         };
+
         let category = match data_entry.get(2) {
             Some(x) => match *x {
                 "Lu" => GeneralCategory::LetterUppercase,
@@ -65,13 +65,7 @@ impl CharEntry {
             },
             None => return None,
         };
-        let unicode_1_name = match data_entry.get(10) {
-            Some(x) => (*x).to_owned(),
-            None => return None,
-        };
-        if is_ferris {
-            name.push_str(" (FERRIS)");
-        }
+        let unicode_1_name = (*(data_entry.get(10)?)).into();
 
         Some(CharEntry {
             codepoint,
@@ -81,14 +75,14 @@ impl CharEntry {
         })
     }
 
-    pub fn fmt_codepoint(codepoint: u32) -> String {
+    pub fn fmt_codepoint(codepoint: u32) -> Box<str> {
         let code = format!("{:X}", codepoint);
         let mut padded = String::new();
         while (padded.len() + code.len()) < 4 {
             padded.push('0');
         }
         padded.push_str(&code);
-        format!("U+{}", padded)
+        format!("U+{}", padded).into_boxed_str()
     }
 }
 

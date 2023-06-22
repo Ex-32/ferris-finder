@@ -24,8 +24,11 @@ fn main() -> Result<()> {
     // create PathBuf pointing to a file to download/cache the UCD data in the
     // user's cache directory
     let filename: PathBuf = [
-        dirs::cache_dir().ok_or(eyre::eyre!("unable to locate cache directory"))?,
-        "ferris-finder.ucd.cache".into(),
+        directories::ProjectDirs::from("", "", env!("CARGO_PKG_NAME"))
+            .ok_or(eyre::eyre!("unable to locate project directories"))?
+            .cache_dir()
+            .to_owned(),
+        "ucd-cache.csv.gz".into(),
     ]
     .iter()
     .collect();
@@ -83,7 +86,7 @@ fn main() -> Result<()> {
         .trim()
         .split('\n')
         .filter_map(ucd::CharEntry::from_ucd_line)
-        .collect::<Vec<_>>();
+        .collect::<Box<[_]>>();
 
     let mut app = app::App::new(running.clone(), io::stdout(), event_receiver, data)
         .wrap_err("error initializing display")?;
@@ -106,9 +109,9 @@ fn main() -> Result<()> {
 
 fn get_unicode_data(filename: &Path) -> Result<String> {
     match fs::File::open(filename) {
-        Ok(mut file) => {
+        Ok(file) => {
             let mut ucd = String::new();
-            let _ = file
+            flate2::read::GzDecoder::new(file)
                 .read_to_string(&mut ucd)
                 .wrap_err("unable to read UCD data from cache")?;
             Ok(ucd)
@@ -118,8 +121,6 @@ fn get_unicode_data(filename: &Path) -> Result<String> {
                 "failed to open UCD cache, attempting to download to:\n{}",
                 filename.to_string_lossy()
             );
-            let mut new_file =
-                fs::File::create(filename).wrap_err("unable to create new file for UCD cache")?;
 
             let ucd = reqwest::blocking::get(
                 "http://www.unicode.org/Public/UCD/latest/ucd/UnicodeData.txt",
@@ -127,6 +128,27 @@ fn get_unicode_data(filename: &Path) -> Result<String> {
             .wrap_err("error in http GET for UCD from www.unicode.org")?
             .text()
             .wrap_err("error decoding UCD message body")?;
+
+            if let Err(e) = fs::create_dir_all(match filename.parent() {
+                Some(x) => x,
+                None => {
+                    eprintln!("unable to resolve project cache dir");
+                    return Ok(ucd);
+                }
+            }) {
+                eprintln!("error creating project cache dir: {}", e);
+                return Ok(ucd);
+            }
+            let mut new_file = flate2::write::GzEncoder::new(
+                match fs::File::create(filename) {
+                    Ok(x) => x,
+                    Err(e) => {
+                        eprintln!("unable to create new file for UCD cache: {}", e);
+                        return Ok(ucd);
+                    }
+                },
+                flate2::Compression::default(),
+            );
 
             match new_file.write_all(ucd.as_bytes()) {
                 Ok(()) => (),
